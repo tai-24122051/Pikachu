@@ -3,7 +3,7 @@ import pygame as pg
 from BFS import bfs
 import json
 import os
-
+from PIL import Image, ImageDraw, ImageFont
 pg.init()
 pg.font.init()
 pg.mixer.init()
@@ -95,16 +95,16 @@ win_sound.set_volume(0.2)
 game_over_sound = pg.mixer.Sound("assets/sound/gameover.wav")
 game_over_sound.set_volume(0.2)
 def main():
+	username = login_screen()
 	#init pygame and module
 	global level, lives
-	
 	while True:
 		level = 1
 		lives = 3
 		start_screen()
 		while level <= MAX_LEVEL:
 			random.shuffle(LIST_BACKGROUND)
-			playing()
+			playing(username)
 			level += 1
 			pg.time.wait(300)
 			pg.mixer.music.play()
@@ -165,7 +165,7 @@ def login_screen():
                 elif login_button_rect.collidepoint(event.pos):
                     if validate_user(username, password):  # Kiểm tra thông tin đăng nhập
                         print(f"Login successful for user: {username}")
-                        return  # Chuyển đến màn hình tiếp theo
+                        return username  # Trả về username khi đăng nhập thành công
                     else:
                         print("Invalid username or password")
                 elif register_button_rect.collidepoint(event.pos):
@@ -190,86 +190,120 @@ def login_screen():
 
 
 def start_screen():
-    global sound_on, music_on, show_instruction
-    while True:
-        Time.tick(FPS)
-        screen.blit(START_SCREEN_BACKGOUND, (0, 0))
+	global sound_on, music_on, show_instruction
 
-        # Render logo
-        image_width, image_height = LOGO_IMAGE.get_size()
-        screen.blit(LOGO_IMAGE, ((SCREEN_WIDTH - image_width) // 2 - 20, (SCREEN_HEIGHT - image_height) // 2 - 150))
-        mouse_x, mouse_y = pg.mouse.get_pos()
+	# Tải hình ảnh nút xếp hạng
+	rank_button = pg.image.load("assets/images/button/rank button.png")
+	rank_button = pg.transform.scale(rank_button, (100, 100))  # Thay đổi kích thước nếu cần
+	rank_rect = rank_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 200))  # Đặt vị trí nút
 
-        # Blit play button
-        image_width, image_height = PLAY_IMAGE.get_size()
-        play_rect = pg.Rect((SCREEN_WIDTH - image_width) // 2, (SCREEN_HEIGHT - image_height) // 2 + 100, image_width, image_height)
-        screen.blit(PLAY_IMAGE, play_rect)
+	while True:
+		Time.tick(FPS)
+		screen.blit(START_SCREEN_BACKGOUND, (0, 0))
 
-        # Other buttons (sound, info, exit)
-        image_width, image_height = SOUND_IMAGE.get_size()
-        sound_rect = pg.Rect(15, SCREEN_HEIGHT - 15 - image_height, image_width, image_height)
-        if sound_on:
-            screen.blit(SOUND_IMAGE, sound_rect)
-        else:
-            draw_dark_image(SOUND_IMAGE, sound_rect, (120, 120, 120))
+		# Render logo
+		image_width, image_height = LOGO_IMAGE.get_size()
+		screen.blit(LOGO_IMAGE, ((SCREEN_WIDTH - image_width) // 2 - 20, (SCREEN_HEIGHT - image_height) // 2 - 150))
+		mouse_x, mouse_y = pg.mouse.get_pos()
 
-        image_width, image_height = INFO_IMAGE.get_size()
-        info_rect = pg.Rect(SCREEN_WIDTH - 15 - image_width, SCREEN_HEIGHT - 15 - image_height, image_width, image_height)
-        screen.blit(INFO_IMAGE, info_rect)
+		# Blit play button
+		image_width, image_height = PLAY_IMAGE.get_size()
+		play_rect = pg.Rect((SCREEN_WIDTH - image_width) // 2, (SCREEN_HEIGHT - image_height) // 2 + 100, image_width,
+							image_height)
+		screen.blit(PLAY_IMAGE, play_rect)
 
-        image_width, image_height = EXIT_IMAGE.get_size()
-        exit_rect = pg.Rect(SCREEN_WIDTH - 220, 105, image_width, image_height)
+		# Blit rank button
+		screen.blit(rank_button, rank_rect)
 
-        if show_instruction:
-            show_dim_screen()
-            draw_instruction()
-            screen.blit(EXIT_IMAGE, exit_rect)
+		# Other buttons (sound, info, exit)
+		image_width, image_height = SOUND_IMAGE.get_size()
+		sound_rect = pg.Rect(15, SCREEN_HEIGHT - 15 - image_height, image_width, image_height)
+		if sound_on:
+			screen.blit(SOUND_IMAGE, sound_rect)
+		else:
+			draw_dark_image(SOUND_IMAGE, sound_rect, (120, 120, 120))
 
-        # Highlight buttons on hover
-        if play_rect.collidepoint(mouse_x, mouse_y) and not show_instruction:
-            draw_dark_image(PLAY_IMAGE, play_rect, (60, 60, 60))
+		image_width, image_height = INFO_IMAGE.get_size()
+		info_rect = pg.Rect(SCREEN_WIDTH - 15 - image_width, SCREEN_HEIGHT - 15 - image_height, image_width,
+							image_height)
+		screen.blit(INFO_IMAGE, info_rect)
 
-        if sound_rect.collidepoint(mouse_x, mouse_y) and not show_instruction:
-            if sound_on:
-                draw_dark_image(SOUND_IMAGE, sound_rect, (60, 60, 60))
+		image_width, image_height = EXIT_IMAGE.get_size()
+		exit_rect = pg.Rect(SCREEN_WIDTH - 220, 105, image_width, image_height)
 
-        if info_rect.collidepoint(mouse_x, mouse_y) and not show_instruction:
-            draw_dark_image(INFO_IMAGE, info_rect, (60, 60, 60))
+		if show_instruction:
+			show_dim_screen()
+			draw_instruction()
+			screen.blit(EXIT_IMAGE, exit_rect)
 
-        if exit_rect.collidepoint(mouse_x, mouse_y) and show_instruction:
-            draw_dark_image(EXIT_IMAGE, exit_rect, (60, 60, 60))
+		# Highlight buttons on hover
+		if play_rect.collidepoint(mouse_x, mouse_y) and not show_instruction:
+			draw_dark_image(PLAY_IMAGE, play_rect, (60, 60, 60))
 
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
-                sys.exit()
-            if event.type == pg.MOUSEBUTTONDOWN:
-                mouse_x, mouse_y = event.pos
-                if play_rect.collidepoint((mouse_x, mouse_y)) and not show_instruction:
-                    click_sound.play()
-                    draw_dark_image(PLAY_IMAGE, play_rect, (120, 120, 120))
-                    pg.display.flip()
-                    pg.time.wait(200)
-                    login_screen()  # Call the login screen here
-                    return
-                if sound_rect.collidepoint(mouse_x, mouse_y):
-                    sound_on = not sound_on
-                    volume = 0.2 if sound_on else 0
-                    pg.mixer.music.set_volume(volume)
-                    success_sound.set_volume(volume)
-                    fail_sound.set_volume(volume)
-                    click_sound.set_volume(volume)
+		if rank_rect.collidepoint(mouse_x, mouse_y):
+			draw_dark_image(rank_button, rank_rect, (60, 60, 60))  # Làm tối nút rank khi hover
 
-                if info_rect.collidepoint(mouse_x, mouse_y):
-                    show_instruction = True
-                    click_sound.play()
-                if exit_rect.collidepoint(mouse_x, mouse_y):
-                    show_instruction = False
-                    click_sound.play()
+		for event in pg.event.get():
+			if event.type == pg.QUIT:
+				pg.quit()
+				sys.exit()
+			if event.type == pg.MOUSEBUTTONDOWN:
+				mouse_x, mouse_y = event.pos
+				if play_rect.collidepoint((mouse_x, mouse_y)) and not show_instruction:
+					click_sound.play()
+					draw_dark_image(PLAY_IMAGE, play_rect, (120, 120, 120))
+					pg.display.flip()
+					pg.time.wait(200)
 
-        pg.display.flip()
+					return
+				if rank_rect.collidepoint(mouse_x, mouse_y):
+					click_sound.play()
+					# Vẽ bảng xếp hạng
+					show_leaderboard = True
+					while show_leaderboard:
+						Time.tick(FPS)
+						# Render lại màn hình nền
+						screen.blit(START_SCREEN_BACKGOUND, (0, 0))
 
-def playing():
+						# Hiển thị bảng xếp hạng
+						draw_leaderboard()  # Hiển thị bảng xếp hạng
+
+						# Vẽ nút "Quay lại"
+						back_button = pg.image.load("assets/images/button/back.png")
+						back_button = pg.transform.scale(back_button, (100, 50))
+						back_rect = back_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 300))
+						screen.blit(back_button, back_rect)
+
+						for event in pg.event.get():
+							if event.type == pg.QUIT:
+								pg.quit()
+								sys.exit()
+							if event.type == pg.MOUSEBUTTONDOWN:
+								mouse_x, mouse_y = event.pos
+								if back_rect.collidepoint(mouse_x, mouse_y):
+									click_sound.play()
+									show_leaderboard = False  # Quay lại màn hình chính
+
+						pg.display.flip()
+				if sound_rect.collidepoint(mouse_x, mouse_y):
+					sound_on = not sound_on
+					volume = 0.2 if sound_on else 0
+					pg.mixer.music.set_volume(volume)
+					success_sound.set_volume(volume)
+					fail_sound.set_volume(volume)
+					click_sound.set_volume(volume)
+
+				if info_rect.collidepoint(mouse_x, mouse_y):
+					show_instruction = True
+					click_sound.play()
+				if exit_rect.collidepoint(mouse_x, mouse_y):
+					show_instruction = False
+					click_sound.play()
+
+		pg.display.flip()
+
+
+def playing(username):
 	global level, lives, paused, time_start_paused, last_time_get_point, time_paused, hinted, hint_shown
 	hinted = False
 	hint_shown = False
@@ -303,6 +337,7 @@ def playing():
 		mouse_clicked = False
 
 		if lives == 0:
+			update_user_level(username, level)
 			show_dim_screen()
 			level = MAX_LEVEL + 1
 			game_over_sound.play()
@@ -329,7 +364,7 @@ def playing():
 					board[tile2_i][tile2_j] = 0
 					bouns_time += 1
 					update_difficulty(board, level, tile1_i, tile1_j, tile2_i, tile2_j)
-
+					update_user_level(username, level)
 					if is_level_complete(board): return
 
 					if not(board[tile1_i][tile1_j] != 0 and bfs(board, tile1_i, tile1_j, tile2_i, tile2_j)):
@@ -393,6 +428,8 @@ def playing():
 							# if level > 1, upgrade difficulty by moving cards
 							update_difficulty(board, level, clicked_tiles[0][0], clicked_tiles[0][1], tile_i, tile_j)
 							if is_level_complete(board):
+								print(level)
+								update_user_level(username, level)
 								if level == 5:
 									pg.mixer.music.pause()
 									fade_speed = 2
@@ -427,11 +464,15 @@ def playing():
 
 
 # Hàm lưu thông tin vào tệp JSON
-def save_user(username, password):
+def save_user(username, password, level=0):
     users = load_users()  # Tải dữ liệu hiện có
-    users[username] = password  # Lưu username và password
+    if username not in users:
+        users[username] = {"password": password, "level": level}  # Thêm người dùng mới
+    else:
+        # Nếu người dùng đã tồn tại, chỉ cập nhật mật khẩu hoặc giữ nguyên
+        users[username]["password"] = password
     with open(USER_DATA_FILE, "w") as f:
-        json.dump(users, f, indent=4)  # Ghi dữ liệu vào tệp JSON
+        json.dump(users, f, indent=4)  # Ghi dữ liệu vào tệp JSON # Ghi dữ liệu vào tệp JSON
 
 # Hàm tải thông tin từ tệp JSON
 def load_users():
@@ -443,7 +484,22 @@ def load_users():
 # Hàm kiểm tra thông tin đăng nhập
 def validate_user(username, password):
     users = load_users()
-    return username in users and users[username] == password
+    return username in users and users[username]["password"] == password
+
+def update_user_level(username, level):
+    users = load_users()
+    if username in users:
+        # Cập nhật level nếu level mới cao hơn level hiện tại
+        users[username]["level"] = max(users[username]["level"], level)
+        with open(USER_DATA_FILE, "w") as f:
+            json.dump(users, f, indent=4)
+
+def get_leaderboard():
+    users = load_users()
+    # Lấy danh sách người chơi với username và level
+    leaderboard = [{"username": username, "level": data["level"]} for username, data in users.items()]
+    # Sắp xếp theo level giảm dần
+    return sorted(leaderboard, key=lambda x: x["level"], reverse=True)
 
 def get_random_board():
 	list_index_tiles = list(range(1, NUM_TILE + 1)) #21
@@ -556,9 +612,11 @@ def draw_time_bar(start_time, bouns_time):
 	pg.draw.rect(screen, 'green', (innerPos, innerSize), border_radius = 20)
 
 def is_level_complete(board):
+	global level, username
 	for i in range(len(board)):
 		for j in range(len(board[0])):
-			if board[i][j] != 0: return False
+			if board[i][j] != 0:
+				return False
 	return True
 
 def update_difficulty(board, level, tile1_i, tile1_j, tile2_i, tile2_j):
@@ -694,6 +752,117 @@ def draw_instruction():
 	panel_rect = pg.Rect(0, 0, *INSTRUCTION_PANEL.get_size())
 	panel_rect.center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
 	screen.blit(INSTRUCTION_PANEL, panel_rect)
+
+# Ghi dữ liệu vào file user.json
+def load_leaderboard(filename="user.json"):
+	with open(filename, "r") as file:
+		return json.load(file)
+
+def save_leaderboard(data, filename="user.json"):
+    with open(filename, "w") as file:
+        json.dump(data, file, indent=4)
+
+# Hàm lấy leaderboard đã được tích hợp vào update_user_level
+def get_leaderboard():
+    try:
+        with open(USER_DATA_FILE, "r") as file:
+            users = json.load(file)
+    except FileNotFoundError:
+        users = {}
+
+    leaderboard = [{"username": username, "level": data["level"]} for username, data in users.items()]
+    leaderboard.sort(key=lambda x: x["level"], reverse=True)
+
+    return leaderboard
+
+# Hàm hiển thị bảng xếp hạng
+def draw_leaderboard():
+    # Khởi tạo Pygame
+    pg.init()
+    SCREEN_WIDTH = 1000  # Kích thước màn hình
+    SCREEN_HEIGHT = 600
+    screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pg.display.set_caption("Bảng xếp hạng")
+    font = pg.font.Font(None, 36)
+
+    # Tải background
+    background = pg.image.load("assets/images/background/login_background.png")
+    background = pg.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    # Tải ảnh exit.png
+    exit_button = pg.image.load("assets/images/button/exit.png")
+    exit_button = pg.transform.scale(exit_button, (50, 50))  # Đảm bảo kích thước phù hợp
+
+    # Lấy dữ liệu bảng xếp hạng
+    leaderboard = get_leaderboard()
+
+    running = True
+    while running:
+        screen.blit(background, (0, 0))  # Vẽ background
+
+        # Vẽ tiêu đề
+        title_text = font.render("RANK", True, (255, 0, 0))
+        screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))
+
+        # Hiển thị danh sách người chơi
+        y = 125  # Vị trí Y bắt đầu
+        for i, entry in enumerate(leaderboard[:10]):  # Hiển thị top 10
+            rank_text = f"{i + 1}.    {entry['username']}  -  Level:  {entry['level']}"
+            text_surface = font.render(rank_text, True, (0, 0, 0))
+            screen.blit(text_surface, (SCREEN_WIDTH // 2 - title_text.get_width() // 2 - 70, y))
+            y += 35  # Khoảng cách giữa các dòng
+
+        # Vẽ nút Exit
+        exit_rect = exit_button.get_rect(topleft=(SCREEN_WIDTH - 60, 20))  # Đặt nút exit ở góc trên bên phải
+        screen.blit(exit_button, exit_rect)
+
+        # Kiểm tra sự kiện
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                running = False
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                # Kiểm tra nếu người dùng click vào nút exit
+                if exit_rect.collidepoint(event.pos):
+                    start_screen()
+
+        pg.display.flip()
+
+    pg.quit()
+def draw_rank_button(rank):
+    # Kích thước nút
+    button_size = 100
+    center = button_size // 2
+    radius = button_size // 2 - 10
+
+    # Tạo ảnh trong suốt bằng Pillow
+    button = Image.new("RGBA", (button_size, button_size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(button)
+
+    # Vẽ hình tròn
+    draw.ellipse(
+        (10, 10, button_size - 10, button_size - 10),
+        fill=(255, 223, 0),  # Màu vàng
+        outline=(255, 200, 0),
+        width=5
+    )
+
+    # Vẽ biểu tượng chiếc cúp
+    try:
+        font = ImageFont.truetype("arial.ttf", 30)
+    except IOError:
+        font = ImageFont.load_default()
+
+    trophy_icon = "🏆"
+    icon_width, icon_height = draw.textsize(trophy_icon, font=font)
+    draw.text((center - icon_width // 2, center - 40), trophy_icon, font=font, fill="black")
+
+    # Vẽ thứ hạng
+    rank_text = f"#{rank}"
+    rank_width, rank_height = draw.textsize(rank_text, font=font)
+    draw.text((center - rank_width // 2, center + 10), rank_text, font=font, fill="black")
+
+    # Chuyển đổi nút sang Surface của Pygame
+    return pg.image.fromstring(button.tobytes(), button.size, button.mode)
 
 if __name__ == '__main__':
 	main()
