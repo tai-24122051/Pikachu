@@ -1,6 +1,7 @@
 import random, collections, time, sys, copy
 import pygame as pg
 from numba.core.cgutils import printf
+from qtconsole.mainwindow import background
 from sympy.codegen.ast import break_
 
 from BFS import bfs
@@ -18,16 +19,21 @@ FPS = 60
 Time = pg.time.Clock()
 screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
+difficulty = None  # Khởi tạo biến độ khó ban đầu
 
 LIST_BACKGROUND = [
     pg.transform.scale(pg.image.load("assets/images/background/" + str(i) + ".jpg"), (SCREEN_WIDTH, SCREEN_HEIGHT)) for
     i in range(10)]
 
+
 BOARD_ROW = 9  # 7
 BOARD_COLUMN = 14  # 12
 NUM_TILE_ON_BOARD = 21
 NUM_SAME_TILE = 4
-
+button_font = pg.font.Font(None, 40)
+easy_button = pg.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60, 200, 50)
+medium_button = pg.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2, 200, 50)
+hard_button = pg.Rect(SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 60, 200, 50)
 TILE_WIDTH = 50
 TILE_HEIGHT = 55
 MARGIN_X = (SCREEN_WIDTH - TILE_WIDTH * BOARD_COLUMN) // 2
@@ -312,10 +318,14 @@ def start_screen():
         pg.display.flip()
 
 
-
-
-
 def playing(username):
+    global difficulty
+
+    # Chỉ chọn độ khó nếu chưa có (tức là khi mới khởi động trò chơi lần đầu)
+    if difficulty is None:
+        difficulty = choose_difficulty()  # Chọn độ khó lần đầu tiên
+
+    set_board_size(difficulty)  # Thiết lập kích thước bảng theo độ khó đã chọn
     global level, lives, paused, time_start_paused, last_time_get_point, time_paused, hinted, hint_shown
     hinted = False
     hint_shown = False
@@ -324,7 +334,7 @@ def playing(username):
     time_paused = 0
 
     background = LIST_BACKGROUND[0]  # get random background
-    board = get_random_board()  # get ramdom board of game
+    board = get_random_board()  # get random board of game
 
     mouse_x, mouse_y = 0, 0
     clicked_tiles = []  # store index cards clicked
@@ -341,7 +351,7 @@ def playing(username):
         dim_screen = pg.Surface(screen.get_size(), pg.SRCALPHA)
         pg.draw.rect(dim_screen, (0, 0, 0, 150), dim_screen.get_rect())
         screen.blit(dim_screen, (0, 0))
-        draw_board(board)
+        draw_board(board)  # Đảm bảo hàm draw_board sử dụng BOARD_ROW và BOARD_COLUMN
         draw_lives(lives, level)
         draw_time_bar(start_time, bouns_time)
         draw_clicked_tiles(board, clicked_tiles)
@@ -358,6 +368,7 @@ def playing(username):
             while time.time() - start_end <= TIME_END:
                 screen.blit(GAMEOVER_BACKGROUND, (0, 0))
                 pg.display.flip()
+            difficulty = None
             return
 
         # check event
@@ -387,7 +398,6 @@ def playing(username):
                             hint = get_hint(board)
 
         draw_pause_button(mouse_x, mouse_y, mouse_clicked)
-
         draw_hint_button(mouse_x, mouse_y, mouse_clicked)
 
         is_time_up = check_time(start_time, bouns_time)  # 0 if game over, 1 if lives -= 1, 2 if nothing
@@ -398,6 +408,7 @@ def playing(username):
             elif is_time_up == 1:
                 lives -= 1
                 level -= 1
+                difficulty = None
                 return
 
             select = panel_pause(mouse_x, mouse_y,
@@ -409,6 +420,7 @@ def playing(username):
                     return
             elif select == 1:
                 level = MAX_LEVEL + 1
+                difficulty = None
                 return
             elif select == 2:
                 mouse_clicked = False  # continue
@@ -523,20 +535,106 @@ def get_leaderboard():
     return sorted(leaderboard, key=lambda x: x["level"], reverse=True)
 
 
+def draw_difficult_buttons():
+    # Vẽ nút "Easy"
+    pg.draw.rect(screen, (127, 255, 0), easy_button)
+    text = button_font.render("Easy", True, (0, 0, 0))
+    screen.blit(text, (easy_button.x + 60, easy_button.y + 10))
+
+    # Vẽ nút "Medium"
+    pg.draw.rect(screen, (255, 255, 0), medium_button)
+    text = button_font.render("Medium", True, (0, 0, 0))
+    screen.blit(text, (medium_button.x + 40, medium_button.y + 10))
+
+    # Vẽ nút "Hard"
+    pg.draw.rect(screen, (255, 0, 0), hard_button)
+    text = button_font.render("Hard", True, (0, 0, 0))
+    screen.blit(text, (hard_button.x + 60, hard_button.y + 10))
+
+
+def set_board_size(difficulty):
+    global BOARD_ROW, BOARD_COLUMN, NUM_TILE_ON_BOARD, NUM_SAME_TILE, MARGIN_Y, MARGIN_X
+    # Thiết lập kích thước bảng theo độ khó
+    if difficulty == "easy":
+        BOARD_ROW, BOARD_COLUMN = 7, 12
+        NUM_TILE_ON_BOARD = 25  # Hoặc điều chỉnh sao cho phù hợp
+        NUM_SAME_TILE = 2
+    elif difficulty == "medium":
+        BOARD_ROW, BOARD_COLUMN = 9, 14
+        NUM_TILE_ON_BOARD = 21
+        NUM_SAME_TILE = 4
+    elif difficulty == "hard":
+        BOARD_ROW, BOARD_COLUMN = 11, 16
+        NUM_TILE_ON_BOARD = 21
+        NUM_SAME_TILE = 6
+
+    MARGIN_X = (SCREEN_WIDTH - TILE_WIDTH * BOARD_COLUMN) // 2
+    MARGIN_Y = (SCREEN_HEIGHT - TILE_HEIGHT * BOARD_ROW) // 2 + 15
+
+    # In ra thông tin kích thước bảng
+    print(f"Set board size for {difficulty}:")
+    print(f"BOARD_ROW: {BOARD_ROW}, BOARD_COLUMN: {BOARD_COLUMN}, NUM_TILE_ON_BOARD: {NUM_TILE_ON_BOARD}")
+
+def choose_difficulty():
+    global difficulty  # Đảm bảo biến difficulty được sử dụng đúng
+
+    # Hiển thị giao diện chọn độ khó
+    background = pg.image.load("assets/images/background/choose_size_background.png")
+    background = pg.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))  # Thay đổi kích thước nếu cần
+
+    running = True
+    while running:
+        screen.blit(background, (0, 0))  # Vẽ nền
+        draw_difficult_buttons()  # Vẽ các nút chọn độ khó
+
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
+
+            if event.type == pg.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+                if easy_button.collidepoint(mouse_x, mouse_y):
+                    print("Chọn mức độ Easy")
+                    running = False
+                    difficulty = "easy"  # Lưu lựa chọn độ khó
+                elif medium_button.collidepoint(mouse_x, mouse_y):
+                    print("Chọn mức độ Medium")
+                    running = False
+                    difficulty = "medium"
+                elif hard_button.collidepoint(mouse_x, mouse_y):
+                    print("Chọn mức độ Hard")
+                    running = False
+                    difficulty = "hard"
+
+        pg.display.flip()
+
+    return difficulty
+
+
+def draw_board_size():
+    # Vẽ thông tin kích thước bảng lên màn hình
+    font = pg.font.Font(None, 36)
+      # Thay đổi kích thước nếu cần
+    text = font.render(f"Rows: {BOARD_ROW}, Columns: {BOARD_COLUMN}, Tiles: {NUM_TILE_ON_BOARD}", True, (255, 255, 255))
+    screen.blit(text, (20, 20))  # Vẽ lên góc trái màn hình
+
+def set_and_draw_board_size(difficulty):
+    set_board_size(difficulty)  # Thiết lập kích thước bảng
+    draw_board_size()           # Vẽ thông tin kích thước bảng lên màn hình
 
 def get_random_board():
-    list_index_tiles = list(range(1, NUM_TILE + 1))  # 21
+    list_index_tiles = list(range(1, NUM_TILE_ON_BOARD + 1))  # Điều chỉnh số lượng ô theo `NUM_TILE_ON_BOARD`
     random.shuffle(list_index_tiles)
-    list_index_tiles = list_index_tiles[:NUM_TILE_ON_BOARD] * NUM_SAME_TILE  # 84
+    list_index_tiles = list_index_tiles * NUM_SAME_TILE  # Điều chỉnh số lần xuất hiện của mỗi ô
     random.shuffle(list_index_tiles)
-    board = [[0 for _ in range(BOARD_COLUMN)] for _ in range(BOARD_ROW)]
+    board = [[0 for _ in range(BOARD_COLUMN)] for _ in range(BOARD_ROW)]  # Sử dụng BOARD_ROW và BOARD_COLUMN
     k = 0
     for i in range(1, BOARD_ROW - 1):
         for j in range(1, BOARD_COLUMN - 1):
             board[i][j] = list_index_tiles[k]
             k += 1
     return board
-
 
 def get_left_top_coords(i, j):  # get left top coords of card from index i, j
     x = j * TILE_WIDTH + MARGIN_X
