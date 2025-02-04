@@ -114,6 +114,8 @@ win_sound.set_volume(0.2)
 game_over_sound = pg.mixer.Sound("assets/sound/gameover.wav")
 game_over_sound.set_volume(0.2)
 
+hint_count = 0
+max_hints = 6  # Mặc định là dễ
 
 def main():
     username = login_screen()
@@ -359,7 +361,7 @@ def playing(username):
         mouse_clicked = False
 
         if lives == 0:
-            update_user_level(username, level)
+            update_user_level(username,difficulty, level)
             show_dim_screen()
             level = MAX_LEVEL + 1
             game_over_sound.play()
@@ -387,7 +389,7 @@ def playing(username):
                     board[tile2_i][tile2_j] = 0
                     bouns_time += 1
                     update_difficulty(board, level, tile1_i, tile1_j, tile2_i, tile2_j)
-                    update_user_level(username, level)
+                    update_user_level(username,difficulty, level)
                     if is_level_complete(board): return
 
                     if not (board[tile1_i][tile1_j] != 0 and bfs(board, tile1_i, tile1_j, tile2_i, tile2_j)):
@@ -398,7 +400,7 @@ def playing(username):
                             hint = get_hint(board)
 
         draw_pause_button(mouse_x, mouse_y, mouse_clicked)
-        draw_hint_button(mouse_x, mouse_y, mouse_clicked)
+        draw_hint_button(mouse_x, mouse_y, mouse_clicked, difficulty)
 
         is_time_up = check_time(start_time, bouns_time)  # 0 if game over, 1 if lives -= 1, 2 if nothing
         if paused:
@@ -455,7 +457,7 @@ def playing(username):
                             update_difficulty(board, level, clicked_tiles[0][0], clicked_tiles[0][1], tile_i, tile_j)
                             if is_level_complete(board):
                                 print(level)
-                                update_user_level(username, level)
+                                update_user_level(username,difficulty, level)
                                 if level == 5:
                                     pg.mixer.music.pause()
                                     fade_speed = 2
@@ -492,17 +494,25 @@ def playing(username):
         pg.display.flip()
 
 
-# Hàm lưu thông tin vào tệp JSON
-def save_user(username, password, level=0):
+def save_user(username, password):
     users = load_users()  # Tải dữ liệu hiện có
+
     if username not in users:
-        users[username] = {"password": password, "level": level}  # Thêm người dùng mới
+        users[username] = {
+            "password": password,
+            "levels": {
+                "easy": 0,
+                "medium": 0,
+                "hard": 0
+            }
+        }  # Thêm người dùng mới với level mặc định = 0 cho mọi độ khó
     else:
-        # Nếu người dùng đã tồn tại, chỉ cập nhật mật khẩu hoặc giữ nguyên
-        users[username]["password"] = password
+        users[username]["password"] = password  # Cập nhật mật khẩu nếu cần
+
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(users, f, indent=4)  # Ghi dữ liệu vào tệp JSON
     with open(USER_DATA_FILE, "w") as f:
         json.dump(users, f, indent=4)  # Ghi dữ liệu vào tệp JSON # Ghi dữ liệu vào tệp JSON
-
 
 # Hàm tải thông tin từ tệp JSON
 def load_users():
@@ -517,14 +527,14 @@ def validate_user(username, password):
     users = load_users()
     return username in users and users[username]["password"] == password
 
-
-def update_user_level(username, level):
+def update_user_level(username, difficulty, level):
     users = load_users()
-    if username in users:
-        # Cập nhật level nếu level mới cao hơn level hiện tại
-        users[username]["level"] = max(users[username]["level"], level)
+    if username in users and difficulty in users[username]["levels"]:
+        users[username]["levels"][difficulty] = level  # Cập nhật level mới
         with open(USER_DATA_FILE, "w") as f:
             json.dump(users, f, indent=4)
+        return True
+    return False
 
 
 def get_leaderboard():
@@ -714,20 +724,49 @@ def draw_hint(hint):
         pg.draw.rect(screen, (0, 255, 0), (x - +1, y - 2, TILE_WIDTH + 4, TILE_HEIGHT + 4), 2)
 
 
-def draw_hint_button(mouse_x, mouse_y, mouse_clicked):
-    global hinted, hint_shown
-    # Define button's position and size
+
+def set_hint_limit(difficulty):
+    global max_hints
+    if difficulty == "easy":
+        max_hints = 6
+    elif difficulty == "medium":
+        max_hints = 10
+    elif difficulty == "hard":
+        max_hints = 14
+
+def draw_hint_button(mouse_x, mouse_y, mouse_clicked, difficulty):
+    global hinted, hint_shown, hint_count
+
+    # Cập nhật giới hạn gợi ý theo độ khó
+    set_hint_limit(difficulty)
+
+    # Định vị nút gợi ý
     hint_button_rect = pg.Rect(0, 0, *HINT_BUTTON.get_size())
     hint_button_rect.center = (SCREEN_WIDTH - 780, 35)
     screen.blit(HINT_BUTTON, hint_button_rect)
+
+    # Vẽ số lần gợi ý còn lại bên phải nút
+    font = pg.font.Font("assets/font/Folty-Book.ttf", 20)  # Chọn font
+    hint_text = font.render(f"{max_hints - hint_count}", True, (250, 0, 0))
+    text_rect = hint_text.get_rect(midleft=(hint_button_rect.right - 70, hint_button_rect.centery))
+    screen.blit(hint_text, text_rect)
+
+    # Nếu hết lượt gợi ý, làm mờ nút
+    if hint_count >= max_hints:
+        draw_dark_image(HINT_BUTTON, hint_button_rect, (120, 120, 120))
+        return
+
+    # Nếu di chuột vào nút gợi ý
     if hint_button_rect.collidepoint(mouse_x, mouse_y):
-        if not hinted: draw_dark_image(HINT_BUTTON, hint_button_rect, (60, 60, 60))
+        if not hinted:
+            draw_dark_image(HINT_BUTTON, hint_button_rect, (60, 60, 60))
+
         if mouse_clicked:
             mouse_clicked = False
             hinted = True
             hint_shown = True
+            hint_count += 1  # Tăng số lần sử dụng gợi ý
             click_sound.play()
-
 
 def draw_time_bar(start_time, bouns_time):
     global time_start_paused, time_paused
@@ -912,73 +951,99 @@ def save_leaderboard(data, filename="user.json"):
 
 
 # Hàm lấy leaderboard đã được tích hợp vào update_user_level
-def get_leaderboard():
+def get_leaderboard(difficulty):
     try:
         with open(USER_DATA_FILE, "r") as file:
             users = json.load(file)
     except FileNotFoundError:
         users = {}
 
-    leaderboard = [{"username": username, "level": data["level"]} for username, data in users.items()]
+    # Lấy level theo độ khó được chỉ định
+    leaderboard = [
+        {"username": username, "level": data["levels"].get(difficulty, 0)}
+        for username, data in users.items()
+    ]
+
+    # Sắp xếp theo level giảm dần
     leaderboard.sort(key=lambda x: x["level"], reverse=True)
 
     return leaderboard
 
 
-# Hàm hiển thị bảng xếp hạng
+
 def draw_leaderboard():
-	# Khởi tạo Pygame
-	global running_draw_leaderboard
-	pg.init()
-	SCREEN_WIDTH = 1000  # Kích thước màn hình
-	SCREEN_HEIGHT = 600
-	screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-	pg.display.set_caption("Bảng xếp hạng")
-	font = pg.font.Font(None, 36)
+    global running_draw_leaderboard
+    pg.init()
 
-	# Tải background
-	background = pg.image.load("assets/images/background/login_background.png")
-	background = pg.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 600
+    screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pg.display.set_caption("Bảng xếp hạng")
+    font = pg.font.Font(None, 36)
 
-	# Tải ảnh exit.png
-	exit_button = pg.image.load("assets/images/button/exit.png")
-	exit_button = pg.transform.scale(exit_button, (50, 50))  # Đảm bảo kích thước phù hợp
+    # Tải background
+    background = pg.image.load("assets/images/background/login_background.png")
+    background = pg.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
-	# Lấy dữ liệu bảng xếp hạng
-	leaderboard = get_leaderboard()
+    # Tải ảnh exit.png
+    exit_button = pg.image.load("assets/images/button/exit.png")
+    exit_button = pg.transform.scale(exit_button, (50, 50))
 
-	running_draw_leaderboard = True
-	while running_draw_leaderboard:
-		screen.blit(background, (0, 0))  # Vẽ background
+    # Tạo các nút chọn độ khó
+    difficulty_options = ["easy", "medium", "hard"]
+    selected_difficulty = "easy"  # Mặc định hiển thị bảng xếp hạng easy
 
-		# Vẽ tiêu đề
-		title_text = font.render("RANK", True, (255, 0, 0))
-		screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))
+    button_font = pg.font.Font(None, 30)
+    button_rects = {}
+    button_x = SCREEN_WIDTH // 2 - 150
+    for i, difficulty in enumerate(difficulty_options):
+        rect = pg.Rect(button_x + i * 110, 10, 100, 40)
+        button_rects[difficulty] = rect
 
-		# Hiển thị danh sách người chơi
-		y = 125  # Vị trí Y bắt đầu
-		for i, entry in enumerate(leaderboard[:10]):  # Hiển thị top 10
-			rank_text = f"{i + 1}.    {entry['username']}  -  Level:  {entry['level']}"
-			text_surface = font.render(rank_text, True, (0, 0, 0))
-			screen.blit(text_surface, (SCREEN_WIDTH // 2 - title_text.get_width() // 2 - 70, y))
-			y += 35  # Khoảng cách giữa các dòng
+    running_draw_leaderboard = True
+    while running_draw_leaderboard:
+        screen.blit(background, (0, 0))  # Vẽ background
 
-		# Vẽ nút Exit
-		exit_rect = exit_button.get_rect(topleft=(SCREEN_WIDTH - 60, 20))  # Đặt nút exit ở góc trên bên phải
-		screen.blit(exit_button, exit_rect)
+        # Vẽ tiêu đề
+        title_text = font.render(f"RANK - {selected_difficulty.upper()}", True, (255, 0, 0))
+        screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))
 
-		# Kiểm tra sự kiện
-		for event in pg.event.get():
-			if event.type == pg.QUIT:
-				running_draw_leaderboard = False
-				break
-			elif event.type == pg.MOUSEBUTTONDOWN:
-				# Kiểm tra nếu người dùng click vào nút exit
-				if exit_rect.collidepoint(event.pos):
-					running_draw_leaderboard = False
-					break
+        # Hiển thị danh sách người chơi theo độ khó đã chọn
+        leaderboard = get_leaderboard(selected_difficulty)
+        y = 125
+        for i, entry in enumerate(leaderboard[:10]):  # Hiển thị top 10
+            rank_text = f"{i + 1}. {entry['username']} - Level: {entry['level']}"
+            text_surface = font.render(rank_text, True, (0, 0, 0))
+            screen.blit(text_surface, (SCREEN_WIDTH // 2 - title_text.get_width() // 2 - 70, y))
+            y += 35  # Khoảng cách giữa các dòng
 
-		pg.display.flip()
+        # Vẽ các nút chọn độ khó
+        for difficulty, rect in button_rects.items():
+            color = (200, 200, 200) if difficulty == selected_difficulty else (100, 100, 100)
+            pg.draw.rect(screen, color, rect)
+            text = button_font.render(difficulty.capitalize(), True, (0, 0, 0))
+            screen.blit(text, (rect.x + 10, rect.y + 10))
+
+        # Vẽ nút Exit
+        exit_rect = exit_button.get_rect(topleft=(SCREEN_WIDTH - 60, 20))
+        screen.blit(exit_button, exit_rect)
+
+        # Kiểm tra sự kiện
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                running_draw_leaderboard = False
+                break
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                if exit_rect.collidepoint(event.pos):
+                    running_draw_leaderboard = False
+                    break
+
+                # Kiểm tra nếu người dùng click vào nút chọn độ khó
+                for difficulty, rect in button_rects.items():
+                    if rect.collidepoint(event.pos):
+                        selected_difficulty = difficulty  # Cập nhật độ khó được chọn
+
+        pg.display.flip()
+
 
 def draw_rank_button(rank):
     # Kích thước nút
