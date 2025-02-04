@@ -1,0 +1,11 @@
+random
+collections
+time
+sys
+copy
+pygame
+numba
+qtconsole
+sympy
+json
+PIL
